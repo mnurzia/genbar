@@ -19,7 +19,7 @@ def bar(pat):
     if pat == "I":
         return (0, 1)
     elif pat == "X":
-        return (0, 2)
+        return (0, 3)
     elif pat == " ":
         return (255, 1)
     else:
@@ -63,9 +63,7 @@ if __name__ == "__main__":
     ap.add_argument("dest", type=FileType("wb"))
     args = ap.parse_args()
 
-    pattern = " ".join(" ".join(code39(ch)) for ch in "*" + args.code + "*").replace(
-        "   ", "  "
-    )
+    pattern = " ".join(" ".join(code39(ch)) for ch in "*" + args.code + "*")
     bars = tuple(bar(p) for p in pattern)
     length = sum(b[1] for b in bars)
     size = (
