@@ -1,5 +1,7 @@
 from argparse import ArgumentParser, FileType
-from PIL import Image
+from struct import pack
+from zlib import crc32, compress
+import struct
 
 
 def code39(ch):
@@ -16,40 +18,50 @@ def code39(ch):
 
 
 def bar(pat):
-    if pat == "I":
-        return (0, 1)
-    elif pat == "X":
-        return (0, 3)
-    elif pat == " ":
-        return (255, 1)
-    else:
-        assert False
+    return {"I": (0, 1), "X": (0, 3), " ": (255, 1)}[pat]
 
 
-def font() -> Image.Image:
-    with open("raster.png", "rb") as raster:
-        # https://github.com/idispatch/raster-fonts
-        raster = Image.open(raster)
-        raster = raster.convert("L")
-        for y in range(raster.size[1]):
-            for x in range(raster.size[0]):
-                raster.putpixel((x, y), 255 if raster.getpixel((x, y)) < 250 else 0)
-        return raster
+FONT_WIDTH = 7
+FONT_HEIGHT = 9
+FONT = {
+    "E": [1, 19, 115, 83, 67, 83, 115, 19, 1],
+    "F": [1, 19, 115, 83, 67, 83, 115, 115, 97],
+    "0": [67, 25, 25, 25, 25, 25, 25, 25, 67],
+    "1": [111, 103, 97, 103, 103, 103, 103, 103, 1],
+    "2": [67, 25, 29, 31, 79, 103, 115, 25, 1],
+    "3": [67, 25, 29, 31, 71, 31, 29, 25, 67],
+    "4": [95, 79, 71, 67, 73, 73, 65, 79, 7],
+    "5": [1, 25, 121, 121, 65, 31, 31, 25, 67],
+    "6": [79, 103, 115, 121, 65, 25, 25, 25, 67],
+    "7": [1, 25, 31, 79, 79, 79, 103, 103, 103],
+    "8": [67, 25, 25, 25, 67, 25, 25, 25, 67],
+    "9": [67, 25, 25, 25, 3, 31, 79, 103, 115],
+}
 
 
-FONT = font()
+def empty(w: int, h: int) -> list[list[int]]:
+    return [[255 for x in range(w)] for y in range(h)]
 
 
-def text(t: str) -> Image.Image:
-    x, y = FONT.size[0] // 16, FONT.size[1] // 16
-    text_img = Image.new("L", (x * len(t), y))
-    for i, ch in enumerate(t):
-        oy = ord(ch) // 16
-        ox = ord(ch) % 16
-        text_img.paste(
-            FONT.crop((ox * x, oy * y, (ox + 1) * x, (oy + 1) * y)), (x * i, 0)
-        )
-    return text_img
+def text(t: str) -> list[list[int]]:
+    img = empty(FONT_WIDTH * len(t), FONT_HEIGHT)
+    for x in range(len(img[0])):
+        (i, ox) = divmod(x, FONT_WIDTH)
+        for y in range(FONT_HEIGHT):
+            img[y][x] = ((FONT[t[i]][y] >> ox) & 1) * 255
+    return img
+
+
+def png(img: list[list[int]]) -> bytes:
+    def chunk(ty: bytes, data: bytes) -> bytes:
+        tydat = struct.pack(f"4s{len(data)}s", ty, data)
+        return struct.pack(f"!I{len(tydat)}sI", len(data), tydat, crc32(tydat))
+
+    header = b"\x89PNG\r\n\x1a\n"
+    ihdr = chunk(b"IHDR", struct.pack("!IIBBBBB", len(img[0]), len(img), 8, 0, 0, 0, 0))
+    idat = chunk(b"IDAT", compress(bytes([y for x in img for y in [0] + x])))
+    iend = chunk(b"IEND", b"")
+    return header + ihdr + idat + iend
 
 
 BAR_HEIGHT = 60
@@ -66,23 +78,18 @@ if __name__ == "__main__":
     pattern = " ".join(" ".join(code39(ch)) for ch in "*" + args.code + "*")
     bars = tuple(bar(p) for p in pattern)
     length = sum(b[1] for b in bars)
-    size = (
+    w, h = (
         BAR_LEADIN + length + BAR_LEADIN,
         BAR_HEIGHT + TEXT_PADDING + TEXT_HEIGHT + TEXT_PADDING,
     )
-    img = Image.new(
-        "L",
-        size,
-        255,
-    )
+    img = empty(w, h)
     x = BAR_LEADIN
     for color, length in bars:
         for i in range(length):
             for y in range(0, BAR_HEIGHT):
-                img.putpixel((x, y), color)
+                img[y][x] = color
             x += 1
-    text_img = text(args.code)
-    img.paste(
-        text_img, ((size[0] // 2) - (text_img.size[0] // 2), BAR_HEIGHT + TEXT_PADDING)
-    )
-    img.save(args.dest)
+    for y, row in enumerate(text(args.code)):
+        for x, col in enumerate(row):
+            img[BAR_HEIGHT + TEXT_PADDING + y][w // 2 - len(row) // 2 + x] = col
+    args.dest.write(png(img))
