@@ -58,15 +58,14 @@ def code128(s) -> str:
                 yield ("B", suf, 100)  # switch B
 
     def search():
-        q = [(typ, suf, [] + [num]) for typ, suf, num in opt("X", s)]
+        q, nextq = [("X", s, [])], []
         while True:
-            nextq = []
             for typ, suf, syms in q:
                 for nexttyp, nextsuf, nextsym in opt(typ, suf):
                     nextq.append((nexttyp, nextsuf, syms + [nextsym]))
                     if nextsuf == "":
                         return nextq[-1][2]
-            q = nextq
+            q, nextq = nextq, []
 
     enc = search()
     idxs = [(enc[0], 1)] + [(ch, i + 1) for i, ch in enumerate(enc[1:])]
