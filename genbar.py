@@ -42,26 +42,19 @@ def code128(s) -> str:
         )
 
     def opt(typ: str, suf: str) -> Iterator[tuple[str, str, int]]:
-        first, rest = suf[0], suf[1:]
-        second = rest[0] if len(rest) else None
-        if first.isdigit():
-            if typ == "X":
+        first, second, rest = suf[0], suf[1] if len(suf) > 1 else None, suf[1:]
+        if typ == "X":
+            if first.isdigit():
                 yield ("C", suf, 105)  # start C
-                yield ("B", suf, 104)  # start B
-            elif typ == "B":
+            yield ("B", suf, 104)  # start B
+        elif typ == "B":
+            if first.isdigit():
                 yield ("C", suf, 99)  # switch C
-                yield ("B", rest, ord(first) - 32)  # keep B
-            else:  # typ == "C"
-                if second is not None and second.isdigit():
-                    yield ("C", rest[1:], int(first + second))  # two digits, stay C
-                else:
-                    yield ("B", suf, 100)  # switch B
-        else:
-            if typ == "X":
-                yield ("B", suf, 104)  # start B
-            elif typ == "B":
-                yield ("B", rest, ord(first) - 32)  # keep B
-            else:  # typ == "C"
+            yield ("B", rest, ord(first) - 32)  # encode B
+        else:  # typ == "C":
+            if first.isdigit() and second is not None and second.isdigit():
+                yield ("C", rest[1:], int(first + second))  # encode C
+            else:
                 yield ("B", suf, 100)  # switch B
 
     def search():
