@@ -2,6 +2,7 @@ from argparse import ArgumentParser, FileType
 from struct import pack
 from zlib import crc32, compress
 from typing import Iterator
+from base64 import b85decode
 
 
 def code39(s) -> str:
@@ -85,25 +86,16 @@ def bar(pat: str) -> int:
 
 
 FONT_WIDTH = 7
-FONT_HEIGHT = 9
-FONT = {
-    "A": [119, 99, 99, 73, 73, 28, 0, 28, 28],
-    "B": [65, 25, 25, 25, 65, 25, 25, 25, 65],
-    "C": [71, 19, 57, 121, 121, 121, 121, 19, 71],
-    "D": [64, 25, 25, 25, 25, 25, 25, 25, 64],
-    "E": [1, 19, 115, 83, 67, 83, 115, 19, 1],
-    "F": [1, 19, 115, 83, 67, 83, 115, 115, 97],
-    "0": [67, 25, 25, 25, 25, 25, 25, 25, 67],
-    "1": [111, 103, 97, 103, 103, 103, 103, 103, 1],
-    "2": [67, 25, 29, 31, 79, 103, 115, 25, 1],
-    "3": [67, 25, 29, 31, 71, 31, 29, 25, 67],
-    "4": [95, 79, 71, 67, 73, 73, 65, 79, 7],
-    "5": [1, 25, 121, 121, 65, 31, 31, 25, 67],
-    "6": [79, 103, 115, 121, 65, 25, 25, 25, 67],
-    "7": [1, 25, 31, 79, 79, 79, 103, 103, 103],
-    "8": [67, 25, 25, 25, 67, 25, 25, 25, 67],
-    "9": [67, 25, 25, 25, 3, 31, 79, 103, 115],
-}
+FONT_HEIGHT = 11
+FONT_ALPHA = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+FONT = """
+5B&4bJ`Bl|F#rFCWXYIjOqqxO{(Sl8&z^k9AOGQ*GG-5+dFTKC49WBGeEBj5|M2tR$&(H|`~UyLGIacN
+=S;)@{0W|U=bt)eAOGNU=g*%$9Q*(OhGfZ;CQO-!|M(NWdFP&e$RGdV=g*!QlO|06{&Gy5eeubXbN~CY
+WWgv<p~Ij5_s5P*nI{e$|Na@1CQO+!WY7Qb^XJc>K6Ide|Au7g_<mfOhyVGBGH}T<WXuoe;mIga;lq+~
+|Nq0!m?lh_GXwwpa!wpLaO9kS|Cur*ND?GWng9IZLWK$d5OC-J;0*cm=g*%!KmRc%Oq@7m$ua-_IWlL@
+pFVhh|KaD)pFVu~;s5?*$&(;VnKEbp@Z`*y6X(e||Nr6V&YU`Y$$|g;2|je;)8<SM|L_c%GGxh<FhBo}
+PtTt|T$7Lg{1YZj!7^mbAOFrA0CG&6c>Dh
+"""
 
 
 def empty(w: int, h: int) -> list[list[int]]:
@@ -111,11 +103,17 @@ def empty(w: int, h: int) -> list[list[int]]:
 
 
 def text(t: str) -> list[list[int]]:
+    dec = int.from_bytes(b85decode(FONT.replace("\n", "")))
     img = empty(FONT_WIDTH * len(t), FONT_HEIGHT)
     for x in range(len(img[0])):
         (i, ox) = divmod(x, FONT_WIDTH)
         for y in range(FONT_HEIGHT):
-            img[y][x] = ((FONT[t[i]][y] >> ox) & 1) * 255
+            idx = (
+                FONT_ALPHA.index(t[i]) * (FONT_WIDTH * FONT_HEIGHT)
+                + y * FONT_WIDTH
+                + ox
+            )
+            img[y][x] = 255 if dec & (1 << idx) else 0
     return img
 
 
